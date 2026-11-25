@@ -1,0 +1,16 @@
+[project]
+name = "plumwatermeter"
+version = "0.1.0"
+description = "Home Assistant custom integration for eWebtel (Plum WebTel) water meters"
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+# tests/     pure modules, no Home Assistant needed
+# tests_ha/  Home Assistant tests (pytest-homeassistant-custom-component)
+pythonpath = ["."]
+asyncio_mode = "auto"
+filterwarnings = ["ignore:Unknown config option"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"

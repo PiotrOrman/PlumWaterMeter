@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Logowanie do eWebtel",
+        "description": "Zaloguj się kontem portalu ewebtel.com.",
+        "data": {
+          "username": "E-mail",
+          "password": "Hasło"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Hasło eWebtel",
+        "description": "eWebtel odrzucił hasło konta {username}. Podaj aktualne hasło.",
+        "data": {
+          "password": "Hasło"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "eWebtel odrzucił e-mail lub hasło.",
+      "cannot_connect": "Brak połączenia z ewebtel.com.",
+      "no_meters": "Konto nie ma żadnych punktów pomiarowych.",
+      "unknown": "Nieoczekiwany błąd, szczegóły w logu."
+    },
+    "abort": {
+      "already_configured": "To konto jest już skonfigurowane.",
+      "reauth_successful": "Hasło zostało zaktualizowane."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "reading": { "name": "Stan licznika" },
+      "reading_time": { "name": "Ostatni odczyt" },
+      "today": { "name": "Zużycie dziś" },
+      "yesterday": { "name": "Zużycie wczoraj" }
+    }
+  }
+}

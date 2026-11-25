@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "eWebtel login",
+        "description": "Log in with the account of the ewebtel.com portal.",
+        "data": {
+          "username": "E-mail",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "eWebtel password",
+        "description": "eWebtel rejected the password of {username}. Enter the current one.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "eWebtel rejected the e-mail or password.",
+      "cannot_connect": "Cannot connect to ewebtel.com.",
+      "no_meters": "The account has no measuring points.",
+      "unknown": "Unexpected error, see the log."
+    },
+    "abort": {
+      "already_configured": "This account is already set up.",
+      "reauth_successful": "The password was updated."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "reading": { "name": "Meter reading" },
+      "reading_time": { "name": "Last reading" },
+      "today": { "name": "Consumption today" },
+      "yesterday": { "name": "Consumption yesterday" }
+    }
+  }
+}
