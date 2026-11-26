@@ -18,21 +18,23 @@ from homeassistant.components.recorder.statistics import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfVolume
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 from homeassistant.util.unit_conversion import VolumeConverter
 
 from .api import EwebtelAuthError, EwebtelClient, EwebtelError, Node
-from .const import DOMAIN, HISTORY_DAYS, RECENT_DAYS, UPDATE_INTERVAL
+from .const import DOMAIN, HISTORY_DAYS, RECENT_DAYS, STALE_AFTER, UPDATE_INTERVAL
 from .processing import (
     PORTAL_TZ,
     Reading,
     build_statistics,
     clean_readings,
-    daily_consumption,
+    consumption_last_24h,
+    consumption_yesterday,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,7 +50,7 @@ class MeterData:
     statistic_id: str
     reading: float | None
     reading_time: datetime | None
-    today: float | None
+    last_24h: float | None
     yesterday: float | None
 
 
@@ -56,6 +58,11 @@ def statistic_id_for(node: Node) -> str:
     """Return the external statistic id of a meter."""
     key = slugify(node.meter_sn or str(node.node_id))
     return f"{DOMAIN}:{key}_water"
+
+
+def stale_issue_id(node_id: int) -> str:
+    """Return the repair issue id raised when a meter stops reporting."""
+    return f"stale_data_{node_id}"
 
 
 def _to_portal_local(moment: datetime) -> datetime:
@@ -80,6 +87,7 @@ class EwebtelCoordinator(DataUpdateCoordinator[dict[int, MeterData]]):
             update_interval=UPDATE_INTERVAL,
         )
         self.client = client
+        self._stale_issues: set[int] = set()
 
     async def _async_update_data(self) -> dict[int, MeterData]:
         try:
@@ -87,9 +95,18 @@ class EwebtelCoordinator(DataUpdateCoordinator[dict[int, MeterData]]):
             result: dict[int, MeterData] = {}
             for node in nodes:
                 result[node.node_id] = await self._async_update_node(node)
+            # A meter that left the account cannot report any more.
+            for node_id in self._stale_issues - result.keys():
+                ir.async_delete_issue(self.hass, DOMAIN, stale_issue_id(node_id))
+            self._stale_issues &= result.keys()
         except EwebtelAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except EwebtelError as err:
+            # The portal being down for days is also "no data": keep the
+            # repair issue up to date from the last good update.
+            now = dt_util.utcnow()
+            for data in (self.data or {}).values():
+                self._update_stale_issue(data.node, data.reading_time, now)
             raise UpdateFailed(str(err)) from err
         return result
 
@@ -147,13 +164,47 @@ class EwebtelCoordinator(DataUpdateCoordinator[dict[int, MeterData]]):
 
         # Same data again, for the sensors; drops were already logged above.
         recent = clean_readings(raw, log_dropped=False)
-        today, yesterday = daily_consumption(recent, now)
         latest = recent[-1] if recent else previous
+        self._update_stale_issue(node, latest.time if latest else None, now)
         return MeterData(
             node=node,
             statistic_id=statistic_id,
             reading=latest.value if latest else None,
             reading_time=latest.time if latest else None,
-            today=today,
-            yesterday=yesterday,
+            last_24h=consumption_last_24h(recent),
+            yesterday=consumption_yesterday(recent, now),
         )
+
+    def _update_stale_issue(self, node: Node, reading_time: datetime | None, now: datetime) -> None:
+        """Raise a repair issue while the newest reading is too old, clear it after."""
+        issue_id = stale_issue_id(node.node_id)
+        if reading_time is not None and now - reading_time <= STALE_AFTER:
+            self._stale_issues.discard(node.node_id)
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            return
+        last = (
+            dt_util.as_local(reading_time).strftime("%Y-%m-%d %H:%M") if reading_time else "never"
+        )
+        if node.node_id not in self._stale_issues:
+            _LOGGER.warning("Meter %s has sent no data since %s", node.name, last)
+        self._stale_issues.add(node.node_id)
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="stale_data",
+            translation_placeholders={
+                "meter": node.name,
+                "last_reading": last,
+                "hours": str(int(STALE_AFTER.total_seconds() // 3600)),
+            },
+        )
+
+    @callback
+    def async_clear_issues(self) -> None:
+        """Remove this entry's repair issues (on unload)."""
+        for node_id in self._stale_issues:
+            ir.async_delete_issue(self.hass, DOMAIN, stale_issue_id(node_id))
+        self._stale_issues.clear()

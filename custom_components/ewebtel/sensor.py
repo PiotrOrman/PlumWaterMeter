@@ -19,6 +19,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import UnitOfVolume
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -50,12 +51,12 @@ SENSORS: tuple[EwebtelSensorDescription, ...] = (
         value_fn=lambda data: data.reading_time,
     ),
     EwebtelSensorDescription(
-        key="today",
-        translation_key="today",
+        key="last_24h",
+        translation_key="last_24h",
         device_class=SensorDeviceClass.WATER,
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         suggested_display_precision=3,
-        value_fn=lambda data: data.today,
+        value_fn=lambda data: data.last_24h,
     ),
     EwebtelSensorDescription(
         key="yesterday",
@@ -76,6 +77,13 @@ async def async_setup_entry(
     """Set up the sensors of every meter of the account."""
     coordinator = entry.runtime_data
     known: set[int] = set()
+
+    # 0.1.0 had a "Consumption today" sensor; with one batch a day it only
+    # ever showed 00:00-05:00. It is replaced by "Consumption last 24 h".
+    registry = er.async_get(hass)
+    for node_id in coordinator.data:
+        if old := registry.async_get_entity_id("sensor", DOMAIN, f"{node_id}_today"):
+            registry.async_remove(old)
 
     def _add_new_meters() -> None:
         new_ids = [node_id for node_id in coordinator.data if node_id not in known]

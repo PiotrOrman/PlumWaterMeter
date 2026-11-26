@@ -30,10 +30,24 @@
   },
   "entity": {
     "sensor": {
-      "reading": { "name": "Meter reading" },
-      "reading_time": { "name": "Last reading" },
-      "today": { "name": "Consumption today" },
-      "yesterday": { "name": "Consumption yesterday" }
+      "reading": {
+        "name": "Meter reading"
+      },
+      "reading_time": {
+        "name": "Last reading"
+      },
+      "last_24h": {
+        "name": "Consumption last 24 h"
+      },
+      "yesterday": {
+        "name": "Consumption yesterday"
+      }
+    }
+  },
+  "issues": {
+    "stale_data": {
+      "title": "Meter {meter} sends no data",
+      "description": "The newest reading of water meter {meter} is from {last_reading}, more than {hours} hours ago. eWebtel meters normally send at least one batch a day. Check the meter in the ewebtel.com portal; this message goes away by itself when data arrives."
     }
   }
 }

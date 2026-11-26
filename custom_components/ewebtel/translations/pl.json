@@ -30,10 +30,24 @@
   },
   "entity": {
     "sensor": {
-      "reading": { "name": "Stan licznika" },
-      "reading_time": { "name": "Ostatni odczyt" },
-      "today": { "name": "Zużycie dziś" },
-      "yesterday": { "name": "Zużycie wczoraj" }
+      "reading": {
+        "name": "Stan licznika"
+      },
+      "reading_time": {
+        "name": "Ostatni odczyt"
+      },
+      "last_24h": {
+        "name": "Zużycie ostatnie 24 h"
+      },
+      "yesterday": {
+        "name": "Zużycie wczoraj"
+      }
+    }
+  },
+  "issues": {
+    "stale_data": {
+      "title": "Wodomierz {meter} nie przesyła danych",
+      "description": "Najnowszy odczyt wodomierza {meter} pochodzi z {last_reading}, sprzed ponad {hours} godzin. Liczniki eWebtel wysyłają zwykle co najmniej jedną paczkę dziennie. Sprawdź licznik w portalu ewebtel.com; ten komunikat zniknie sam, gdy dane dotrą."
     }
   }
 }

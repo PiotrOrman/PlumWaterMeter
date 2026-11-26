@@ -129,51 +129,75 @@ def test_build_statistics_continues_stored_sum():
     assert stats[0].sum == 19.506
 
 
-def test_daily_consumption():
-    tz = p.PORTAL_TZ
+def local(*args: int) -> datetime:
+    return datetime(*args, tzinfo=p.PORTAL_TZ).astimezone(UTC)
+
+
+def test_consumption_yesterday():
     readings = [
-        Reading(datetime(2026, 11, 24, 0, tzinfo=tz).astimezone(UTC), 486.478),
-        Reading(datetime(2026, 11, 24, 12, tzinfo=tz).astimezone(UTC), 486.6),
-        Reading(datetime(2026, 11, 25, 0, tzinfo=tz).astimezone(UTC), 486.742),
-        Reading(datetime(2026, 11, 25, 5, tzinfo=tz).astimezone(UTC), 486.747),
+        Reading(local(2026, 11, 24, 0), 486.478),
+        Reading(local(2026, 11, 24, 12), 486.6),
+        Reading(local(2026, 11, 25, 0), 486.742),
+        Reading(local(2026, 11, 25, 5), 486.747),
     ]
-    now = datetime(2026, 11, 25, 10, 16, tzinfo=tz)
-    today, yesterday = p.daily_consumption(readings, now)
-    assert today == 0.005
-    assert yesterday == 0.264
+    now = datetime(2026, 11, 25, 10, 16, tzinfo=p.PORTAL_TZ)
+    assert p.consumption_yesterday(readings, now) == 0.264
 
 
-def test_daily_consumption_without_history():
-    tz = p.PORTAL_TZ
-    readings = [Reading(datetime(2026, 11, 25, 5, tzinfo=tz).astimezone(UTC), 486.747)]
-    today, yesterday = p.daily_consumption(readings, datetime(2026, 11, 25, 10, tzinfo=tz))
-    assert today is None
-    assert yesterday is None
+def test_consumption_yesterday_without_history():
+    readings = [Reading(local(2026, 11, 25, 5), 486.747)]
+    now = datetime(2026, 11, 25, 10, tzinfo=p.PORTAL_TZ)
+    assert p.consumption_yesterday(readings, now) is None
+    assert p.consumption_yesterday([], now) is None
 
 
-def test_daily_consumption_across_dst():
-    tz = p.PORTAL_TZ
-    # 2026-10-25 has 25 hours; "yesterday" on the 26th must start at local midnight.
+def test_consumption_yesterday_across_dst():
+    # 2026-10-25 has 25 hours; "yesterday" on the 26th starts at local midnight.
     readings = [
-        Reading(datetime(2026, 10, 25, 0, tzinfo=tz).astimezone(UTC), 479.0),
-        Reading(datetime(2026, 10, 25, 23, tzinfo=tz).astimezone(UTC), 479.1),
-        Reading(datetime(2026, 10, 26, 0, tzinfo=tz).astimezone(UTC), 479.3),
+        Reading(local(2026, 10, 25, 0), 479.0),
+        Reading(local(2026, 10, 25, 23), 479.1),
+        Reading(local(2026, 10, 26, 0), 479.3),
     ]
-    _, yesterday = p.daily_consumption(readings, datetime(2026, 10, 26, 8, tzinfo=tz))
-    assert yesterday == 0.3
-    assert (datetime(2026, 10, 26, 0, tzinfo=tz) - timedelta(days=1)).astimezone(UTC) == readings[
-        0
-    ].time
+    now = datetime(2026, 10, 26, 8, tzinfo=p.PORTAL_TZ)
+    assert p.consumption_yesterday(readings, now) == 0.3
 
 
-def test_daily_consumption_waits_for_a_reading_after_midnight():
-    tz = p.PORTAL_TZ
+def test_consumption_yesterday_waits_for_the_morning_batch():
     readings = [
-        Reading(datetime(2026, 11, 24, 0, tzinfo=tz).astimezone(UTC), 486.478),
-        Reading(datetime(2026, 11, 24, 18, tzinfo=tz).astimezone(UTC), 486.66),
+        Reading(local(2026, 11, 24, 0), 486.478),
+        Reading(local(2026, 11, 25, 0), 486.742),
     ]
-    # 03:00: the batch with the evening and midnight hours has not arrived yet.
-    assert p.daily_consumption(readings, datetime(2026, 11, 25, 3, tzinfo=tz)) == (None, None)
+    # 03:00 on the 26th: the batch with the 25th's evening and midnight has not arrived.
+    assert p.consumption_yesterday(readings, datetime(2026, 11, 26, 3, tzinfo=p.PORTAL_TZ)) is None
+
+
+def test_consumption_last_24h():
+    # One batch a day: the window is 05:00 to 05:00, whatever the time now.
+    readings = [
+        Reading(local(2026, 11, 25, 4) + timedelta(hours=h), 487.0 + h / 100) for h in range(26)
+    ]
+    assert p.consumption_last_24h(readings) == 0.24
+
+
+def test_consumption_last_24h_too_short_or_gap():
+    readings = [Reading(local(2026, 11, 26, h), 487.0 + h / 100) for h in range(6)]
+    assert p.consumption_last_24h(readings) is None
+    assert p.consumption_last_24h([]) is None
+    # Nearest earlier reading 30 h back: the window would be too long.
+    gap = [Reading(local(2026, 11, 24, 23), 486.0), Reading(local(2026, 11, 26, 5), 487.0)]
+    assert p.consumption_last_24h(gap) is None
+
+
+def test_consumption_last_24h_across_dst():
+    # The portal merges the two 02:00 hours of 2026-10-25, so the reading at
+    # 01:00 UTC (the second 02:00 local) is missing. When it is the window's
+    # base, the reading an hour earlier is used.
+    readings = [
+        Reading(utc("2026-10-25T00:00:00"), 478.0),  # first 02:00 local
+        Reading(utc("2026-10-25T02:00:00"), 478.1),  # 03:00 local (CET)
+        Reading(utc("2026-10-26T01:00:00"), 478.6),
+    ]
+    assert p.consumption_last_24h(readings) == 0.6
 
 
 def test_build_statistics_without_stored_state():

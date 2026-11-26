@@ -6,11 +6,13 @@ which Polish water utilities use for radio meter reading.
 
 - Imports the **hourly meter readings** as long-term statistics, at the
   hours the water was used, including the **full history** the portal holds.
-  The meter reports in batches a few times a day, so a live sensor alone
-  would put the consumption at the wrong hours.
+  The meter sends **one batch a day**, just after 05:00, with the hourly
+  readings of the past 24 hours, so a live sensor alone would put the
+  consumption at the wrong hours.
 - Works with the **Energy dashboard** (Water consumption).
 - Adds sensors per meter: meter reading, time of the last reading,
-  consumption today and yesterday.
+  consumption over the last 24 hours and yesterday.
+- Raises a repair issue when the daily batch does not arrive.
 - Set up from the UI (e-mail and password of the portal); asks for a new
   password when the portal rejects the stored one.
 
@@ -42,7 +44,8 @@ Assistant.
 2. Enter the e-mail and password you use on ewebtel.com.
 
 The first update imports the whole history. After that the integration
-polls every hour and adds only the new hours.
+polls every hour and adds only the new hours; new data shows up once a day,
+in the first update after the meter's morning batch (about 05:00-06:00).
 
 ## Energy dashboard
 
@@ -57,9 +60,21 @@ they don't create a second, wrongly timed statistic.
 | Sensor | Meaning |
 |---|---|
 | Meter reading | Latest reading of the meter (m³). The attribute `statistic_id` names the imported statistic. |
-| Last reading | Time of that reading. Expect it to be hours old: the meter sends data in batches. |
-| Consumption today | Latest reading minus the reading at local midnight. |
-| Consumption yesterday | Reading at midnight minus the reading a day earlier. |
+| Last reading | Time of that reading. Normally up to ~24 h old: the meter sends one batch a day. |
+| Consumption last 24 h | Latest reading minus the reading 24 h before it (05:00 to 05:00). Changes once a day, with each batch. |
+| Consumption yesterday | Reading at midnight minus the reading a day earlier. Empty from midnight until the morning batch arrives. |
+
+Version 0.1.0 had a *Consumption today* sensor instead of *Consumption
+last 24 h*. With one batch a day it only ever showed 00:00-05:00, so 0.2.0
+replaces it and removes the old entity.
+
+## Repair issue: no data
+
+If the newest reading is more than 30 hours old (the morning batch did not
+arrive), the integration raises a warning in **Settings → System →
+Repairs** and logs it once. The issue goes away by itself with the next
+reading. Check the meter in the ewebtel.com portal: if the portal has no
+new data either, the meter or its radio module is not sending.
 
 ## How the data is cleaned
 

@@ -170,16 +170,33 @@ def reading_at(readings: list[Reading], moment: datetime) -> Reading | None:
     return found
 
 
-def daily_consumption(
-    readings: list[Reading], now: datetime, tz: tzinfo = PORTAL_TZ
-) -> tuple[float | None, float | None]:
-    """Return (today, yesterday) consumption in m³ in the portal's time zone.
+def consumption_last_24h(readings: list[Reading]) -> float | None:
+    """Return the consumption over the 24 hours that end at the latest reading.
 
-    Today is the latest reading minus the reading at local midnight.
-    Yesterday is the midnight reading minus the one a day before. Both are
-    ``None`` until a reading at or after midnight has arrived (the meter
-    reports hours late, so yesterday would be partial), and when the
-    readings do not reach back far enough.
+    The meter reports once a day, so this changes with each batch and always
+    covers a whole day of use. ``None`` when the readings do not reach back
+    24 hours, or when a gap would stretch the window past 25 hours (one
+    hour of slack for the merged DST hour).
+    """
+    if not readings:
+        return None
+    latest = readings[-1]
+    window_start = latest.time - timedelta(hours=24)
+    base = reading_at(readings, window_start)
+    if base is None or base.time < window_start - timedelta(hours=1):
+        return None
+    return round(latest.value - base.value, 3)
+
+
+def consumption_yesterday(
+    readings: list[Reading], now: datetime, tz: tzinfo = PORTAL_TZ
+) -> float | None:
+    """Return yesterday's consumption in m³ in the portal's time zone.
+
+    The reading at local midnight minus the one a day before. ``None`` until
+    a reading at or after midnight has arrived (the meter reports hours
+    late, so the value would be partial), and when the readings do not
+    reach back far enough.
     """
     local_now = now.astimezone(tz)
     midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -188,16 +205,10 @@ def daily_consumption(
     midnight_utc = midnight.astimezone(UTC)
     day_before_utc = (midnight - timedelta(days=1)).astimezone(UTC)
 
+    if not readings or readings[-1].time < midnight_utc:
+        return None
     at_midnight = reading_at(readings, midnight_utc)
     at_day_before = reading_at(readings, day_before_utc)
-    latest = readings[-1] if readings else None
-    if latest is None or latest.time < midnight_utc:
-        return None, None
-
-    today = None
-    if latest is not None and at_midnight is not None:
-        today = round(latest.value - at_midnight.value, 3)
-    yesterday = None
-    if at_midnight is not None and at_day_before is not None:
-        yesterday = round(at_midnight.value - at_day_before.value, 3)
-    return today, yesterday
+    if at_midnight is None or at_day_before is None:
+        return None
+    return round(at_midnight.value - at_day_before.value, 3)

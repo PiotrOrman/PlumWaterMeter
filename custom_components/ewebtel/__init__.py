@@ -28,4 +28,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: EwebtelConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, entry: EwebtelConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        # Raised again by the next update if the meter is still silent.
+        entry.runtime_data.async_clear_issues()
+    return unloaded
