@@ -95,6 +95,15 @@ After a meter swap the reading starts again near zero and the integration
 ignores it as a drop. Remove the integration, delete the statistic in
 **Tools → Statistics**, and set the integration up again.
 
+## Brand images
+
+`custom_components/ewebtel/brand/` holds the icon and logo that Home
+Assistant (2026.10+) shows for the integration, light and dark. They are
+made from the Plum logo on the ewebtel.com login page; "WATER" is set in
+Lato (SIL Open Font License), the portal's font. The Plum name and logo
+are trademarks of Plum Sp. z o.o.; this integration is not affiliated with
+or endorsed by Plum.
+
 ## Development
 
 Two test suites:
